@@ -1,9 +1,9 @@
 <!-- eslint-disable vue/no-unused-vars -->
 <template>
-  <q-page class="container bg-red">
+  <q-page class="container bg-purple">
     <h1>Testing new grid layout</h1>
 
-    <div class="self-center">
+    <div class="self-center q-gutter-sm">
       <q-btn
         color="dark"
         type="button"
@@ -12,6 +12,13 @@
       />
       <q-btn color="dark" type="button" @click="resetGrid" label="Reset Grid" />
       <q-btn color="dark" type="button" @click="clearGrid" label="Clear Grid" />
+      <q-select
+        color="dark"
+        :model-value="sizeSelectModel"
+        :options="Object.keys(sizes)"
+        label="Grid Item Size"
+        @update:model-value="setItemSize"
+      />
       <br />
     </div>
 
@@ -21,7 +28,9 @@
         :widget="w as GridStackNode"
         :key="w.id"
         @removeWidget="(w: GridStackNode) => remove(w)"
-      />
+      >
+        <div class="text-h6">Hello from slot in {{ w.id }}</div>
+      </GridWidget>
     </div>
   </q-page>
 </template>
@@ -30,17 +39,21 @@
 /*  eslint-disable */
 // @ts-nocheck
 import 'gridstack/dist/gridstack.min.css';
-// import 'gridstack/dist/gridstack-extra.min.css'; // needed to alter the number of columns
-import { ref, onMounted, nextTick } from 'vue';
+// import 'gridstack/dist/gridstack-extra.min.css'; // needed to alter the number of columns + other extended functionality
+import { ref, onMounted, nextTick, onUnmounted } from 'vue';
 import { GridStack, type GridStackNode } from 'gridstack';
 import GridWidget from 'components/GridWidget.vue';
 
 let grid: GridStack | null = null; // DO NOT use ref(null) as proxies GS will break all logic when comparing structures... see https://github.com/gridstack/gridstack.js/issues/2115
+const COLUMNS = 12; // Default number of columns used for all breaks points and page sizes
+const sizes = { MIN: 1, XS: 2, SM: 3, M: 4, LG: 6, MAX: 12 };
+const sizeSelectModel = ref();
 const itemHeight = 4;
-const itemWidth = 4;
+const itemWidth = ref(sizes['M']);
 let items = ref<GridStackNode[]>([]);
 
 onMounted(() => {
+  // initialise grid on component mounting
   grid = GridStack.init({
     // DO NOT use grid.value = GridStack.init(), see above
     float: true,
@@ -51,12 +64,20 @@ onMounted(() => {
   if (!grid) {
     console.error('Grid not ready/found on GridArea component mount');
   }
+
+  // setup any event listeners for the grid
+
   // grid.on('dragstop', function (_, element) {
   // });
 
   grid.on('change', onChange);
 });
 
+/**
+ * OnChange is used in conjunction with any native `change` event is called on the Grid.
+ * Change events occur when widgets change their position/size due to constrain  of the grid
+ * or when direct changes are made by the user on a specfic widget.
+ */
 const onChange = (_: Event, changeItems: GridStackNode[]) => {
   // update item position
   changeItems.forEach((item: GridStackNode) => {
@@ -107,8 +128,8 @@ const findNextAvailablePosition = (
 
     // Move to the next position
     x += w;
-    if (x + w > 12) {
-      // 12 is the total number of columns in the grid
+    if (x + w > COLUMNS) {
+      // COLUMNS is the total number of columns in the grid - default is 12.
       x = 0;
       y += h;
     }
@@ -117,8 +138,8 @@ const findNextAvailablePosition = (
 
 // reset function
 const resetGrid = () => {
-  let x = 0; // Starting x position
-  let y = 0; // Starting y position
+  let x = 0; // Starting x position - having been reset
+  let y = 0; // Starting y position - having been reset
 
   // Create a new array for the reset items
   items.value = items.value.map((i) => {
@@ -126,14 +147,14 @@ const resetGrid = () => {
       ...i,
       x: x,
       y: y,
-      w: itemWidth,
+      w: itemWidth.value,
       h: itemHeight,
     };
 
     // Move to the next position
-    x += itemWidth;
-    if (x + itemWidth > 12) {
-      // If the next item exceeds the total number of columns
+    x += itemWidth.value;
+    if (x + itemWidth.value > COLUMNS) {
+      // If the next item exceeds the total number of columns - default 12.
       x = 0;
       y += itemHeight;
     }
@@ -141,15 +162,16 @@ const resetGrid = () => {
     return newItem;
   });
 
+  // load the the updated items array into the grid, which updates all elements in the layout.
   grid.load(items.value);
 };
 
-// clear Grid
 const clearGrid = () => {
   if (!grid) {
     console.error('cannot clear grid: grid is undefined');
     return;
   }
+
   grid?.removeAll();
   items.value = [];
 };
@@ -164,7 +186,7 @@ const addNewWidget = () => {
   const id = crypto.randomUUID();
 
   const { x, y } = findNextAvailablePosition(
-    itemWidth,
+    itemWidth.value,
     itemHeight,
     items.value
   );
@@ -172,13 +194,21 @@ const addNewWidget = () => {
   const node: GridStackNode = {
     x,
     y,
-    w: itemWidth,
+    w: itemWidth.value,
     h: itemHeight,
     id: `w_${id}`,
   };
   items.value.push(node);
 
+  // Wait for nextTick i.e. until after the any current DOM updates have been flushed.
   nextTick(() => grid!.makeWidget(node.id));
+};
+
+// update Grid item sizes
+const setItemSize = (s) => {
+  itemWidth.value = sizes[s];
+  sizeSelectModel.value = s;
+  resetGrid();
 };
 
 const remove = (widget: GridStackNode) => {
@@ -187,14 +217,23 @@ const remove = (widget: GridStackNode) => {
     return;
   }
 
-  console.log('items before del: ', items.value);
   items.value = items.value.filter((w) => w.id !== widget.id);
 
   const selector = `#${widget.id}`;
   grid.removeWidget(selector, false);
-
-  console.log('items after del: ', items.value);
 };
+
+onUnmounted(() => {
+  // cleanup destroy grid DOM nodes
+  if (!grid) {
+    console.error('cannot unmount grid: grid is undefined');
+    return;
+  }
+
+  // grid.save() native method to save grid state that could potentially be used alongside existing localStorage functionality
+  grid.destroy();
+  grid = null;
+});
 </script>
 
 <style scoped>
