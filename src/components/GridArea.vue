@@ -1,18 +1,17 @@
-<!-- eslint-disable vue/no-unused-vars -->
 <template>
-  <q-page class="container bg-purple">
-    <h1>Testing new grid layout</h1>
+  <q-page class="container bg-primary">
+    <h1 class="text-center text-white">Testing new grid layout</h1>
 
     <div class="self-center q-gutter-sm">
       <q-btn color="dark" type="button" @click="addNewWidget" label="Add Widget" />
       <q-btn color="dark" type="button" @click="resetGrid" label="Reset Grid" />
       <q-btn color="dark" type="button" @click="clearGrid" label="Clear Grid" />
       <q-btn color="dark" type="button" @click="setResize"
-        :label="`${isResizable ? 'Disable' : 'Enable'} Item Resize`" />
+        :label="`${isResizableDisabled ? 'Enable' : 'Disable'} Item Resize`" />
       <q-btn color="dark" type="button" @click="setDraggable"
         :label="`${isDragDisabled ? 'Enable' : 'Disable'} Item Drag`" />
-      <q-select color="dark" :model-value="sizeSelectModel" :options="Object.keys(sizes)" label="Grid Item Size"
-        @update:model-value="setItemSize" />
+      <q-select :model-value="sizeSelectModel" :options="Object.keys(SIZES)" label="Grid Item Size"
+        @update:model-value="setItemSize" label-color="white" input-style="color: 'white'" rounded />
       <br />
     </div>
 
@@ -26,23 +25,29 @@
 </template>
 
 <script setup lang="ts">
-/*  eslint-disable */
-// @ts-nocheck
-import 'gridstack/dist/gridstack.min.css';
 // import 'gridstack/dist/gridstack-extra.min.css'; // needed to alter the number of columns + other extended functionality
+import 'gridstack/dist/gridstack.min.css';
 import { ref, onMounted, nextTick, onUnmounted } from 'vue';
-import { GridItemHTMLElement, GridStack, type GridStackNode } from 'gridstack';
+import { GridStack, type GridStackNode } from 'gridstack';
 import GridWidget from 'components/GridWidget.vue';
 
-let grid: GridStack | null = null; // DO NOT use ref(null) as proxies GS will break all logic when comparing structures... see https://github.com/gridstack/gridstack.js/issues/2115
 const COLUMNS = 12; // Default number of columns used for all breaks points and page sizes
-const isDragDisabled = ref(false);
-const isResizable = ref(true);
-
-const sizes = { MIN: 1, XS: 2, SM: 3, M: 4, LG: 6, MAX: 12 };
-const sizeSelectModel = ref();
+const SIZES: Record<string, number> = {
+  MIN: 1,
+  XS: 2,
+  SM: 3,
+  M: 4,
+  LG: 6,
+  MAX: 12,
+};
 const itemHeight = 4;
-const itemWidth = ref(sizes['M']);
+const itemWidth = ref(SIZES['M']);
+
+const sizeSelectModel = ref('M');
+let grid: GridStack | null = null; // DO NOT use ref(null) as proxies GS will break all logic when comparing structures... see https://github.com/gridstack/gridstack.js/issues/2115
+const isDragDisabled = ref(false);
+const isResizableDisabled = ref(false);
+
 let items = ref<GridStackNode[]>([]);
 
 onMounted(() => {
@@ -52,7 +57,7 @@ onMounted(() => {
     float: true,
     cellHeight: '70px',
     minRow: 1,
-    resizable: isResizable.value,
+    disableResize: isResizableDisabled.value,
     disableDrag: isDragDisabled.value,
   });
 
@@ -67,6 +72,7 @@ onMounted(() => {
 
   grid.on('change', onChange);
 });
+
 /**
  * OnChange is used in conjunction with any native `change` event is called on the Grid.
  * Change events occur when widgets change their position/size due to constrain  of the grid
@@ -74,10 +80,10 @@ onMounted(() => {
  */
 const onChange = (_: Event, changeItems: GridStackNode[]) => {
   // update item position
-  changeItems.forEach((item: GridStackNode) => {
+  changeItems.forEach((item) => {
     const widget = items.value.find((w) => w.id == item.id);
     if (!widget) {
-      alert('Widget not found: ' + item.id);
+      console.error(`Widget not found:  ${item.id}`);
       return;
     }
 
@@ -96,13 +102,24 @@ const isPositionAvailable = (
   h: number
 ): boolean => {
   // Check if the position collides with any existing item
-  return !items.value.some(
-    (item) =>
-      x < item.x + item.w &&
-      x + w > item.x &&
-      y < item.y + item.h &&
-      y + h > item.y
-  );
+  return !items.value.some((item) => {
+    // Ensure the properties are defined before using them
+    if (
+      item.x === undefined ||
+      item.y === undefined ||
+      item.w === undefined ||
+      item.h === undefined
+    ) {
+      return false;
+    }
+
+    return (
+      x < item.x + item.w && // Check if the right edge of the new item is to the right of the left edge of the existing item
+      x + w > item.x &&      // Check if the left edge of the new item is to the left of the right edge of the existing item
+      y < item.y + item.h && // Check if the bottom edge of the new item is below the top edge of the existing item
+      y + h > item.y         // Check if the top edge of the new item is above the bottom edge of the existing item
+    );
+  });
 };
 
 const findNextAvailablePosition = (
@@ -132,6 +149,11 @@ const findNextAvailablePosition = (
 
 // reset function
 const resetGrid = () => {
+  if (!grid) {
+    console.error('cannot reset grid: grid is undefined');
+    return;
+  }
+
   let x = 0; // Starting x position - having been reset
   let y = 0; // Starting y position - having been reset
 
@@ -179,13 +201,9 @@ const addNewWidget = () => {
 
   const id = crypto.randomUUID();
 
-  const { x, y } = findNextAvailablePosition(
-    itemWidth.value,
-    itemHeight,
-    items.value
-  );
+  const { x, y } = findNextAvailablePosition(itemWidth.value, itemHeight);
 
-  const node: GridStackNode = {
+  const node = {
     x,
     y,
     w: itemWidth.value,
@@ -195,11 +213,11 @@ const addNewWidget = () => {
   items.value.push(node);
 
   // Wait for nextTick i.e. until after the any current DOM updates have been flushed.
-  nextTick(() => grid!.makeWidget(node.id));
+  nextTick(() => grid?.makeWidget(node.id));
 };
 
-const setItemSize = (s) => {
-  itemWidth.value = sizes[s];
+const setItemSize = (s: string) => {
+  itemWidth.value = SIZES[s];
   sizeSelectModel.value = s;
   resetGrid();
 };
@@ -217,8 +235,10 @@ const remove = (widget: GridStackNode) => {
 };
 
 const setResize = () => {
-  isResizable.value = !isResizable.value;
-  grid?.enableResize(isResizable.value);
+  isResizableDisabled.value = !isResizableDisabled.value;
+
+  // passing the opposite of isResizeable, as true activates resize and false deactivates it.
+  grid?.enableResize(!isResizableDisabled.value);
 };
 
 const setDraggable = () => {
