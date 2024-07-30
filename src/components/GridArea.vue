@@ -4,31 +4,21 @@
     <h1>Testing new grid layout</h1>
 
     <div class="self-center q-gutter-sm">
-      <q-btn
-        color="dark"
-        type="button"
-        @click="addNewWidget"
-        label="Add Widget"
-      />
+      <q-btn color="dark" type="button" @click="addNewWidget" label="Add Widget" />
       <q-btn color="dark" type="button" @click="resetGrid" label="Reset Grid" />
       <q-btn color="dark" type="button" @click="clearGrid" label="Clear Grid" />
-      <q-select
-        color="dark"
-        :model-value="sizeSelectModel"
-        :options="Object.keys(sizes)"
-        label="Grid Item Size"
-        @update:model-value="setItemSize"
-      />
+      <q-btn color="dark" type="button" @click="setResize"
+        :label="`${isResizable ? 'Disable' : 'Enable'} Item Resize`" />
+      <q-btn color="dark" type="button" @click="setDraggable"
+        :label="`${isDragDisabled ? 'Enable' : 'Disable'} Item Drag`" />
+      <q-select color="dark" :model-value="sizeSelectModel" :options="Object.keys(sizes)" label="Grid Item Size"
+        @update:model-value="setItemSize" />
       <br />
     </div>
 
     <div class="grid-stack">
-      <GridWidget
-        v-for="w in items"
-        :widget="w as GridStackNode"
-        :key="w.id"
-        @removeWidget="(w: GridStackNode) => remove(w)"
-      >
+      <GridWidget v-for="w in items" :widget="w as GridStackNode" :key="w.id"
+        @removeWidget="(w: GridStackNode) => remove(w)">
         <div class="text-h6">Hello from slot in {{ w.id }}</div>
       </GridWidget>
     </div>
@@ -41,11 +31,14 @@
 import 'gridstack/dist/gridstack.min.css';
 // import 'gridstack/dist/gridstack-extra.min.css'; // needed to alter the number of columns + other extended functionality
 import { ref, onMounted, nextTick, onUnmounted } from 'vue';
-import { GridStack, type GridStackNode } from 'gridstack';
+import { GridItemHTMLElement, GridStack, type GridStackNode } from 'gridstack';
 import GridWidget from 'components/GridWidget.vue';
 
 let grid: GridStack | null = null; // DO NOT use ref(null) as proxies GS will break all logic when comparing structures... see https://github.com/gridstack/gridstack.js/issues/2115
 const COLUMNS = 12; // Default number of columns used for all breaks points and page sizes
+const isDragDisabled = ref(false);
+const isResizable = ref(true);
+
 const sizes = { MIN: 1, XS: 2, SM: 3, M: 4, LG: 6, MAX: 12 };
 const sizeSelectModel = ref();
 const itemHeight = 4;
@@ -59,6 +52,8 @@ onMounted(() => {
     float: true,
     cellHeight: '70px',
     minRow: 1,
+    resizable: isResizable.value,
+    disableDrag: isDragDisabled.value,
   });
 
   if (!grid) {
@@ -72,7 +67,6 @@ onMounted(() => {
 
   grid.on('change', onChange);
 });
-
 /**
  * OnChange is used in conjunction with any native `change` event is called on the Grid.
  * Change events occur when widgets change their position/size due to constrain  of the grid
@@ -204,7 +198,6 @@ const addNewWidget = () => {
   nextTick(() => grid!.makeWidget(node.id));
 };
 
-// update Grid item sizes
 const setItemSize = (s) => {
   itemWidth.value = sizes[s];
   sizeSelectModel.value = s;
@@ -221,6 +214,18 @@ const remove = (widget: GridStackNode) => {
 
   const selector = `#${widget.id}`;
   grid.removeWidget(selector, false);
+};
+
+const setResize = () => {
+  isResizable.value = !isResizable.value;
+  grid?.enableResize(isResizable.value);
+};
+
+const setDraggable = () => {
+  isDragDisabled.value = !isDragDisabled.value;
+
+  // passing the opposite of dragDisabled, as true activates drag and false deactivates it.
+  grid?.enableMove(!isDragDisabled.value);
 };
 
 onUnmounted(() => {
