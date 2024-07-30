@@ -3,16 +3,24 @@
   <q-page class="container bg-red">
     <h1>Testing new grid layout</h1>
 
-    <button type="button" @click="addNewWidget">Add Widget pos [0,0]</button>
-    <button type="button" @click="removeLastWidget">Remove Last Widget</button>
-    <br />
-    <br />
-    <button type="button" @click="changeFloat()">Float: {{ gridFloat }}</button>
-    <br />
+    <div class="self-center">
+      <button type="button" @click="addNewWidget">Add Widget pos [0,0]</button>
+      <button type="button" @click="removeLastWidget">
+        Remove Last Widget
+      </button>
+      <br />
+      <button type="button" @click="changeFloat">Float: {{ gridFloat }}</button>
+      <button type="button" @click="resetGrid">reset</button>
+      <br />
+    </div>
 
     <div class="grid-stack">
-      <GridWidget v-for="w in items" :widget="w as GridStackNode" :key="w.id"
-        @removeWidget="(w: GridStackNode) => remove(w)" />
+      <GridWidget
+        v-for="w in items"
+        :widget="w as GridStackNode"
+        :key="w.id"
+        @removeWidget="(w: GridStackNode) => remove(w)"
+      />
     </div>
   </q-page>
 </template>
@@ -34,7 +42,7 @@ let items = ref<GridStackNode[]>([]);
 
 onMounted(() => {
   grid = GridStack.init({
-    // DO NOT user grid.value = GridStack.init(), see above
+    // DO NOT use grid.value = GridStack.init(), see above
     float: true,
     cellHeight: '70px',
     minRow: 1,
@@ -72,27 +80,7 @@ const onChange = (_: Event, changeItems: GridStackNode[]) => {
   });
 };
 
-const addNewWidget = () => {
-  if (!grid) {
-    console.error('cannot add new widget: grid is undefined');
-    return;
-  }
-  const id = crypto.randomUUID();
-
-  const { x, y } = findNextAvailablePosition(itemWidth, itemHeight);
-
-  const node: GridStackNode = {
-    x,
-    y,
-    w: itemWidth,
-    h: itemHeight,
-    id: `w_${id}`,
-  };
-  items.value.push(node);
-
-  nextTick(() => grid!.makeWidget(node.id));
-};
-
+// Position functions
 const isPositionAvailable = (
   x: number,
   y: number,
@@ -134,12 +122,60 @@ const findNextAvailablePosition = (
   }
 };
 
-const removeLastWidget = () => {
-  if (items.value.length <= 0) {
+// reset function
+const resetGrid = () => {
+  let x = 0; // Starting x position
+  let y = 0; // Starting y position
+
+  // Create a new array for the reset items
+  items.value = items.value.map((i) => {
+    const newItem = {
+      ...i,
+      x: x,
+      y: y,
+      w: itemWidth,
+      h: itemHeight,
+    };
+
+    // Move to the next position
+    x += itemWidth;
+    if (x + itemWidth > 12) {
+      // If the next item exceeds the total number of columns
+      x = 0;
+      y += itemHeight;
+    }
+
+    return newItem;
+  });
+
+  grid.load(items.value);
+};
+
+// widget functions
+const addNewWidget = () => {
+  if (!grid) {
+    console.error('cannot add new widget: grid is undefined');
     return;
   }
-  const lastItem = items.value[items.value.length - 1] as GridStackNode;
-  remove(lastItem);
+
+  const id = crypto.randomUUID();
+
+  const { x, y } = findNextAvailablePosition(
+    itemWidth,
+    itemHeight,
+    items.value
+  );
+
+  const node: GridStackNode = {
+    x,
+    y,
+    w: itemWidth,
+    h: itemHeight,
+    id: `w_${id}`,
+  };
+  items.value.push(node);
+
+  nextTick(() => grid!.makeWidget(node.id));
 };
 
 const remove = (widget: GridStackNode) => {
@@ -155,6 +191,14 @@ const remove = (widget: GridStackNode) => {
   grid.removeWidget(selector, false);
 
   console.log('items after del: ', items.value);
+};
+
+const removeLastWidget = () => {
+  if (items.value.length <= 0) {
+    return;
+  }
+  const lastItem = items.value[items.value.length - 1] as GridStackNode;
+  remove(lastItem);
 };
 </script>
 
