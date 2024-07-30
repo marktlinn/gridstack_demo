@@ -4,13 +4,14 @@
     <h1>Testing new grid layout</h1>
 
     <div class="self-center">
-      <button type="button" @click="addNewWidget">Add Widget pos [0,0]</button>
-      <button type="button" @click="removeLastWidget">
-        Remove Last Widget
-      </button>
-      <br />
-      <button type="button" @click="changeFloat">Float: {{ gridFloat }}</button>
-      <button type="button" @click="resetGrid">reset</button>
+      <q-btn
+        color="dark"
+        type="button"
+        @click="addNewWidget"
+        label="Add Widget"
+      />
+      <q-btn color="dark" type="button" @click="resetGrid" label="Reset Grid" />
+      <q-btn color="dark" type="button" @click="clearGrid" label="Clear Grid" />
       <br />
     </div>
 
@@ -34,7 +35,6 @@ import { ref, onMounted, nextTick } from 'vue';
 import { GridStack, type GridStackNode } from 'gridstack';
 import GridWidget from 'components/GridWidget.vue';
 
-let gridFloat = ref(false);
 let grid: GridStack | null = null; // DO NOT use ref(null) as proxies GS will break all logic when comparing structures... see https://github.com/gridstack/gridstack.js/issues/2115
 const itemHeight = 4;
 const itemWidth = 4;
@@ -56,13 +56,6 @@ onMounted(() => {
 
   grid.on('change', onChange);
 });
-
-const changeFloat = () => {
-  gridFloat.value = !gridFloat.value;
-  if (grid) {
-    grid.float(gridFloat.value);
-  }
-};
 
 const onChange = (_: Event, changeItems: GridStackNode[]) => {
   // update item position
@@ -151,6 +144,16 @@ const resetGrid = () => {
   grid.load(items.value);
 };
 
+// clear Grid
+const clearGrid = () => {
+  if (!grid) {
+    console.error('cannot clear grid: grid is undefined');
+    return;
+  }
+  grid?.removeAll();
+  items.value = [];
+};
+
 // widget functions
 const addNewWidget = () => {
   if (!grid) {
@@ -191,14 +194,6 @@ const remove = (widget: GridStackNode) => {
   grid.removeWidget(selector, false);
 
   console.log('items after del: ', items.value);
-};
-
-const removeLastWidget = () => {
-  if (items.value.length <= 0) {
-    return;
-  }
-  const lastItem = items.value[items.value.length - 1] as GridStackNode;
-  remove(lastItem);
 };
 </script>
 

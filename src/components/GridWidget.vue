@@ -12,6 +12,9 @@
     <div class="grid-stack-item-content">
       <button @click="$emit('removeWidget', widget)">remove</button>
       {{ widget }}
+      <q-card>
+        <div class="text-h6">Hello from {{ widget.id }}</div>
+      </q-card>
     </div>
   </div>
 </template>
