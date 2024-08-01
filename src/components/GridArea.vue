@@ -3,21 +3,47 @@
     <h1 class="text-center text-white">Testing new grid layout</h1>
 
     <div class="self-center q-gutter-sm">
-      <q-btn color="dark" type="button" @click="addNewWidget" label="Add Widget" />
+      <q-btn
+        color="dark"
+        type="button"
+        @click="addNewWidget"
+        label="Add Widget"
+      />
       <q-btn color="dark" type="button" @click="resetGrid" label="Reset Grid" />
       <q-btn color="dark" type="button" @click="clearGrid" label="Clear Grid" />
-      <q-btn color="dark" type="button" @click="setResize"
-        :label="`${isResizableDisabled ? 'Enable' : 'Disable'} Item Resize`" />
-      <q-btn color="dark" type="button" @click="setDraggable"
-        :label="`${isDragDisabled ? 'Enable' : 'Disable'} Item Drag`" />
-      <q-select :model-value="sizeSelectModel" :options="Object.keys(SIZES)" label="Grid Item Size"
-        @update:model-value="setItemSize" label-color="white" input-style="color: 'white'" rounded />
+      <q-btn
+        color="dark"
+        type="button"
+        @click="setResize"
+        :label="`${isResizableDisabled ? 'Enable' : 'Disable'} Item Resize`"
+      />
+      <q-btn
+        color="dark"
+        type="button"
+        @click="setDraggable"
+        :label="`${isDragDisabled ? 'Enable' : 'Disable'} Item Drag`"
+      />
+      <q-select
+        :model-value="sizeSelectModel"
+        :options="Object.keys(SIZES)"
+        label="Grid Item Size"
+        @update:model-value="setItemSize"
+        label-color="white"
+        input-style="color: 'white'"
+        rounded
+      />
       <br />
     </div>
 
     <div class="grid-stack">
-      <GridWidget v-for="w in items" :widget="w as GridStackNode" :key="w.id"
-        @removeWidget="(w: GridStackNode) => remove(w)">
+      <GridWidget
+        v-for="w in items"
+        :widget="w as GridStackNode"
+        :key="w.id"
+        @removeWidget="(w: GridStackNode) => remove(w)"
+        @toggleResize="(w: GridStackNode) => toggleResize(w)"
+        @toggleMove="(w: GridStackNode) => toggleMove(w)"
+      >
         <div class="text-h6">Hello from slot in {{ w.id }}</div>
       </GridWidget>
     </div>
@@ -25,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-// import 'gridstack/dist/gridstack-extra.min.css'; // needed to alter the number of columns + other extended functionality
+import 'gridstack/dist/gridstack-extra.min.css'; // needed to alter the number of columns + other extended functionality
 import 'gridstack/dist/gridstack.min.css';
 import { ref, onMounted, nextTick, onUnmounted } from 'vue';
 import { GridStack, type GridStackNode } from 'gridstack';
@@ -48,7 +74,7 @@ let grid: GridStack | null = null; // DO NOT use ref(null) as proxies GS will br
 const isDragDisabled = ref(false);
 const isResizableDisabled = ref(false);
 
-let items = ref<GridStackNode[]>([]);
+const items = ref<GridStackNode[]>([]);
 
 onMounted(() => {
   // initialise grid on component mounting
@@ -73,6 +99,55 @@ onMounted(() => {
   grid.on('change', onChange);
 });
 
+// update individual widget
+const toggleResize = (w: GridStackNode) => {
+  if (!grid) {
+    console.error('cannot update widget on grid: grid is undefined');
+    return;
+  }
+
+  const resize = w?.noResize ? false : true;
+  const newW = { ...w, noResize: resize };
+
+  if (w.id) {
+    grid.update(w.id, newW);
+
+    // ensure items.value value updated
+    const newArr = items.value.map((item) => {
+      if (item.id === w.id) {
+        return { ...newW };
+      }
+      return item;
+    });
+
+    items.value = [...newArr];
+  }
+};
+
+const toggleMove = (w: GridStackNode) => {
+  if (!grid) {
+    console.error('cannot update widget on grid: grid is undefined');
+    return;
+  }
+
+  const resize = w?.noMove ? false : true;
+  const newW = { ...w, noMove: resize };
+
+  if (w.id) {
+    grid.update(w.id, newW);
+
+    // ensure items.value value updated
+    const newArr = items.value.map((item) => {
+      if (item.id === w.id) {
+        return { ...newW };
+      }
+      return item;
+    });
+
+    items.value = [...newArr];
+  }
+};
+
 /**
  * OnChange is used in conjunction with any native `change` event is called on the Grid.
  * Change events occur when widgets change their position/size due to constrain  of the grid
@@ -92,59 +167,6 @@ const onChange = (_: Event, changeItems: GridStackNode[]) => {
     widget.w = item.w;
     widget.h = item.h;
   });
-};
-
-// Position functions
-const isPositionAvailable = (
-  x: number,
-  y: number,
-  w: number,
-  h: number
-): boolean => {
-  // Check if the position collides with any existing item
-  return !items.value.some((item) => {
-    // Ensure the properties are defined before using them
-    if (
-      item.x === undefined ||
-      item.y === undefined ||
-      item.w === undefined ||
-      item.h === undefined
-    ) {
-      return false;
-    }
-
-    return (
-      x < item.x + item.w && // Check if the right edge of the new item is to the right of the left edge of the existing item
-      x + w > item.x &&      // Check if the left edge of the new item is to the left of the right edge of the existing item
-      y < item.y + item.h && // Check if the bottom edge of the new item is below the top edge of the existing item
-      y + h > item.y         // Check if the top edge of the new item is above the bottom edge of the existing item
-    );
-  });
-};
-
-const findNextAvailablePosition = (
-  w: number,
-  h: number
-): { x: number; y: number } => {
-  // Start from the top-left corner of the grid
-  let x = 0;
-  let y = 0;
-
-  // Iterate through rows and columns to find the next available position
-  while (true) {
-    // Check if the current position is available
-    if (isPositionAvailable(x, y, w, h)) {
-      return { x, y };
-    }
-
-    // Move to the next position
-    x += w;
-    if (x + w > COLUMNS) {
-      // COLUMNS is the total number of columns in the grid - default is 12.
-      x = 0;
-      y += h;
-    }
-  }
 };
 
 // reset function
@@ -201,11 +223,8 @@ const addNewWidget = () => {
 
   const id = crypto.randomUUID();
 
-  const { x, y } = findNextAvailablePosition(itemWidth.value, itemHeight);
-
   const node = {
-    x,
-    y,
+    autoPosition: true,
     w: itemWidth.value,
     h: itemHeight,
     id: `w_${id}`,
@@ -230,8 +249,10 @@ const remove = (widget: GridStackNode) => {
 
   items.value = items.value.filter((w) => w.id !== widget.id);
 
-  const selector = `#${widget.id}`;
-  grid.removeWidget(selector, false);
+  // const selector = `#${widget.id}`;
+  if (widget?.id) {
+    grid.removeWidget(widget.id, false);
+  }
 };
 
 const setResize = () => {
@@ -272,5 +293,9 @@ onUnmounted(() => {
   flex: 1;
   /* This makes sure the grid-stack element grows to fill the container */
   background-color: grey;
+}
+
+.minimised {
+  display: none;
 }
 </style>

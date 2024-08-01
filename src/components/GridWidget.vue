@@ -11,6 +11,8 @@
   >
     <div class="grid-stack-item-content">
       <button @click="$emit('removeWidget', widget)">remove</button>
+      <button @click="$emit('toggleMove', widget)">toggleMove</button>
+      <button @click="$emit('toggleResize', widget)">toggleResize</button>
       {{ widget }}
       <q-card>
         <slot />
@@ -20,8 +22,6 @@
 </template>
 
 <script setup lang="ts">
-/*  eslint-disable */
-// @ts-nocheck
 import { type GridStackNode } from 'gridstack';
 defineProps<{ widget: GridStackNode }>();
 </script>
